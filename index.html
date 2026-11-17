@@ -1,0 +1,386 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OBBY CUBE 3D</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #78c9ff;
+    font-family: Arial, sans-serif;
+    color: white;
+}
+
+canvas { display: block; }
+
+#ui {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+}
+
+#logo {
+    position: absolute;
+    top: 18px;
+    left: 20px;
+    font-size: 25px;
+    font-weight: 900;
+    text-shadow: 0 3px 10px #234;
+}
+
+#stats {
+    position: absolute;
+    top: 18px;
+    right: 20px;
+    background: #111b;
+    padding: 12px 18px;
+    border-radius: 12px;
+    line-height: 1.8;
+}
+
+#message {
+    position: absolute;
+    top: 43%;
+    width: 100%;
+    text-align: center;
+    font-size: 30px;
+    font-weight: bold;
+    text-shadow: 0 3px 8px #222;
+}
+
+#controls {
+    position: absolute;
+    bottom: 25px;
+    left: 20px;
+    display: flex;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+#controls button, #jump {
+    border: 0;
+    border-radius: 15px;
+    background: #17243cdd;
+    color: white;
+    font-size: 25px;
+    width: 58px;
+    height: 58px;
+    touch-action: none;
+}
+
+#jump {
+    position: absolute;
+    bottom: 25px;
+    right: 25px;
+    pointer-events: auto;
+    width: 85px;
+    height: 85px;
+    background: #713cff;
+    font-size: 17px;
+    font-weight: bold;
+}
+
+#help {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    text-shadow: 0 2px 5px black;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    <div id="logo">🟦 OBBY CUBE 3D</div>
+
+    <div id="stats">
+        💀 Śmierci: <span id="deaths">0</span><br>
+        🪙 Monety: <span id="coins">0</span><br>
+        🚩 Checkpoint: <span id="checkpoint">1</span>
+    </div>
+
+    <div id="message">OBBY CUBE 3D</div>
+
+    <div id="controls">
+        <button id="left">◀</button>
+        <button id="right">▶</button>
+        <button id="forward">▲</button>
+        <button id="back">▼</button>
+    </div>
+
+    <button id="jump">SKOK</button>
+
+    <div id="help">
+        WASD / STRZAŁKI – RUCH · SPACJA – SKOK
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<script>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x78c9ff);
+scene.fog = new THREE.Fog(0x78c9ff, 30, 100);
+
+const camera = new THREE.PerspectiveCamera(
+    70, window.innerWidth / window.innerHeight, 0.1, 200
+);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x527099, 2));
+
+const sun = new THREE.DirectionalLight(0xffffff, 2);
+sun.position.set(10, 20, 10);
+sun.castShadow = true;
+scene.add(sun);
+
+const mat = color => new THREE.MeshStandardMaterial({color});
+
+const player = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    mat(0x713cff)
+);
+player.castShadow = true;
+scene.add(player);
+
+const platforms = [];
+const coins = [];
+const hazards = [];
+const checkpoints = [];
+
+function platform(x,y,z,w,d,color) {
+    const p = new THREE.Mesh(
+        new THREE.BoxGeometry(w,0.6,d),
+        mat(color)
+    );
+    p.position.set(x,y,z);
+    p.receiveShadow = true;
+    p.castShadow = true;
+    scene.add(p);
+    platforms.push({x,y,z,w,d});
+    return p;
+}
+
+function coin(x,y,z) {
+    const c = new THREE.Mesh(
+        new THREE.TorusGeometry(0.35,0.09,8,20),
+        new THREE.MeshStandardMaterial({
+            color:0xffdf36,
+            emissive:0x8a5700
+        })
+    );
+    c.position.set(x,y,z);
+    scene.add(c);
+    coins.push(c);
+}
+
+function lava(x,y,z,w,d) {
+    const l = platform(x,y,z,w,d,0xff2929);
+    hazards.push({x,y,z,w,d});
+    return l;
+}
+
+// Trasa obby
+platform(0,0,0,8,8,0x37c96b);
+platform(0,0,-7,4,4,0x20bfff);
+platform(3,1,-12,3,3,0xffcc30);
+platform(0,2,-17,3,3,0xff8c42);
+platform(-3,2,-22,3,3,0xa66bff);
+platform(-3,1,-28,5,5,0x37c96b);
+
+lava(0,-2,-12,5,4);
+lava(0,-2,-22,5,4);
+
+coin(0,1,-7);
+coin(3,2,-12);
+coin(0,3,-17);
+coin(-3,3,-22);
+
+const flag = new THREE.Group();
+const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(.06,.06,2,8),
+    mat(0xffffff)
+);
+pole.position.y=1;
+flag.add(pole);
+
+const flagCloth = new THREE.Mesh(
+    new THREE.BoxGeometry(1,.6,.08),
+    mat(0xffdf36)
+);
+flagCloth.position.set(.5,1.6,0);
+flag.add(flagCloth);
+flag.position.set(-4,2.3,-28);
+scene.add(flag);
+checkpoints.push({x:-3,y:1.8,z:-28});
+
+let spawn = {x:0,y:1,z:0};
+let deaths = 0;
+let score = 0;
+let grounded = false;
+let velocityY = 0;
+let won = false;
+
+const keys = {};
+const buttons = {};
+
+window.addEventListener('keydown',e=>{
+    keys[e.key.toLowerCase()] = true;
+    if(e.code === 'Space') jump();
+});
+window.addEventListener('keyup',e=>{
+    keys[e.key.toLowerCase()] = false;
+});
+
+function bindButton(id,key) {
+    const b = document.getElementById(id);
+    b.addEventListener('pointerdown',e=>{
+        e.preventDefault();
+        buttons[key]=true;
+    });
+    ['pointerup','pointerleave','pointercancel'].forEach(event=>{
+        b.addEventListener(event,()=>buttons[key]=false);
+    });
+}
+
+bindButton('left','a');
+bindButton('right','d');
+bindButton('forward','w');
+bindButton('back','s');
+
+document.getElementById('jump').addEventListener('pointerdown',jump);
+
+function jump() {
+    if(grounded && !won) {
+        velocityY=0.19;
+        grounded=false;
+    }
+}
+
+function reset() {
+    deaths++;
+    player.position.set(spawn.x,spawn.y,spawn.z);
+    velocityY=0;
+    document.getElementById('deaths').textContent=deaths;
+}
+
+function intersects(a,b) {
+    return Math.abs(a.x-b.x)<(a.w+1)/2 &&
+           Math.abs(a.z-b.z)<(a.d+1)/2;
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    if(!won) {
+        let dx=0,dz=0;
+        if(keys['a']||keys['arrowleft']||buttons.a) dx-=1;
+        if(keys['d']||keys['arrowright']||buttons.d) dx+=1;
+        if(keys['w']||keys['arrowup']||buttons.w) dz-=1;
+        if(keys['s']||keys['arrowdown']||buttons.s) dz+=1;
+
+        const length=Math.hypot(dx,dz);
+        if(length>0) {
+            player.position.x+=dx/length*.12;
+            player.position.z+=dz/length*.12;
+        }
+
+        const oldY=player.position.y;
+        velocityY-=0.009;
+        player.position.y+=velocityY;
+        grounded=false;
+
+        for(const p of platforms) {
+            if(intersects(player.position,p) &&
+               velocityY<=0 &&
+               oldY-0.5>=p.y+0.25 &&
+               player.position.y-0.5<=p.y+0.3) {
+                player.position.y=p.y+0.8;
+                velocityY=0;
+                grounded=true;
+            }
+        }
+
+        for(const h of hazards) {
+            if(intersects(player.position,h) &&
+               player.position.y< h.y+1.5) {
+                reset();
+            }
+        }
+
+        for(let i=coins.length-1;i>=0;i--) {
+            const c=coins[i];
+            c.rotation.y+=.04;
+            if(player.position.distanceTo(c.position)<1.2) {
+                scene.remove(c);
+                coins.splice(i,1);
+                score++;
+                document.getElementById('coins').textContent=score;
+            }
+        }
+
+        if(player.position.distanceTo(
+            new THREE.Vector3(-3,2,-28)
+        )<2) {
+            spawn={x:-3,y:3,z:-28};
+            document.getElementById('checkpoint').textContent='2';
+        }
+
+        if(player.position.y < -8) reset();
+
+        if(player.position.z < -32) {
+            won=true;
+            document.getElementById('message').innerHTML=
+                '🏆 WYGRAŁEŚ!<br><button onclick="location.reload()" style="padding:15px;border:0;border-radius:10px;margin-top:20px">ZAGRAJ PONOWNIE</button>';
+        }
+    }
+
+    const target = new THREE.Vector3(
+        player.position.x,
+        player.position.y+1,
+        player.position.z+5
+    );
+    camera.position.lerp(target,0.08);
+    camera.lookAt(
+        player.position.x,
+        player.position.y,
+        player.position.z-2
+    );
+
+    renderer.render(scene,camera);
+}
+
+setTimeout(()=>{
+    document.getElementById('message').style.display='none';
+},2000);
+
+window.addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+});
+
+player.position.copy(new THREE.Vector3(0,1,0));
+animate();
+</script>
+
+</body>
+</html>
